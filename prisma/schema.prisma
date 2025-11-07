@@ -1,0 +1,240 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  password      String?  // Add password field
+  phone         String?  // Add phone field
+  aadhaarNumber String?  // Add Aadhaar number field
+  role          UserRole @default(CUSTOMER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  shops     Shop[]
+  orders    Order[]
+  complaints Complaint[]
+
+  @@map("users")
+}
+
+// Shop model
+model Shop {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  address     String
+  latitude    Float?
+  longitude   Float?
+  phone       String?
+  email       String?
+  status      ShopStatus  @default(PENDING)
+  ownerId     String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  owner       User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  products    Product[]
+  orders      Order[]
+
+  @@map("shops")
+}
+
+// Product model
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  quantity    Int      @default(0)
+  category    String?
+  expiryDate  DateTime?
+  shopId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+
+  @@map("products")
+}
+
+// Order model
+model Order {
+  id              String      @id @default(cuid())
+  status          OrderStatus @default(PENDING)
+  totalAmount     Float
+  customerId      String
+  shopId          String
+  deliveryAddress String?
+  deliveryPhone   String?
+  paymentMethod   String?
+  paymentStatus   String?
+  notes           String?
+  requestType      String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  customer        User        @relation(fields: [customerId], references: [id])
+  shop            Shop        @relation(fields: [shopId], references: [id])
+  items           OrderItem[]
+  delivery        Delivery?
+
+  @@map("orders")
+}
+
+// OrderItem model
+model OrderItem {
+  id              String @id @default(cuid())
+  quantity        Int
+  price           Float
+  orderId         String
+  productId       String
+  approvalStatus  String?
+  rejectionReason String?
+
+  // Relations
+  order           Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+// Complaint model
+model Complaint {
+  id          String          @id @default(cuid())
+  title       String
+  description String
+  status      ComplaintStatus  @default(OPEN)
+  priority    ComplaintPriority @default(MEDIUM)
+  customerId  String
+  shopId      String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // Relations
+  customer    User            @relation(fields: [customerId], references: [id])
+
+  @@map("complaints")
+}
+
+// DeliveryAgent model
+model DeliveryAgent {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  password      String
+  phone         String
+  vehicleType   String?  // bike, car, bicycle, etc.
+  vehicleNumber String?
+  licenseNumber String?
+  aadhaarNumber String?
+  address       String?
+  status        DeliveryAgentStatus @default(PENDING)
+  isAvailable   Boolean  @default(true)
+  rating        Float?   @default(0)
+  totalDeliveries Int    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  deliveries   Delivery[]
+
+  @@map("delivery_agents")
+}
+
+// Delivery model
+model Delivery {
+  id              String        @id @default(cuid())
+  orderId         String        @unique
+  deliveryAgentId String?
+  status          DeliveryStatus @default(ASSIGNED)
+  assignedAt      DateTime?
+  pickedUpAt      DateTime?
+  deliveredAt     DateTime?
+  deliveryAddress String
+  deliveryPhone   String?
+  notes           String?
+  rating          Int?          // 1-5 rating from customer
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  deliveryAgent   DeliveryAgent? @relation(fields: [deliveryAgentId], references: [id])
+
+  @@map("deliveries")
+}
+
+// Enums
+enum UserRole {
+  CUSTOMER
+  SHOPKEEPER
+  ADMIN
+  DELIVERY_AGENT
+  FARMER
+}
+
+enum ShopStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum OrderStatus {
+  PENDING
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CONFIRMED
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum DeliveryAgentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+enum ComplaintPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}

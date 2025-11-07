@@ -1,0 +1,58 @@
+{
+  "placeholderImages": [
+    {
+      "id": "user_avatar_1",
+      "description": "User avatar",
+      "imageUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=400&h=400&fit=crop",
+      "imageHint": "person face"
+    },
+    {
+      "id": "product_apple",
+      "description": "Fresh red apples",
+      "imageUrl": "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?q=80&w=400&h=300&fit=crop",
+      "imageHint": "red apple"
+    },
+    {
+      "id": "product_milk",
+      "description": "Carton of milk",
+      "imageUrl": "https://images.unsplash.com/photo-1559593268-59fee3a55e78?q=80&w=400&h=300&fit=crop",
+      "imageHint": "milk carton"
+    },
+    {
+      "id": "product_bread",
+      "description": "Loaf of bread",
+      "imageUrl": "https://images.unsplash.com/photo-1598373182133-52452f7691ef?q=80&w=400&h=300&fit=crop",
+      "imageHint": "sliced bread"
+    },
+    {
+      "id": "product_eggs",
+      "description": "Carton of eggs",
+      "imageUrl": "https://images.unsplash.com/photo-1598965672906-4b8c2243e33f?q=80&w=400&h=300&fit=crop",
+      "imageHint": "egg carton"
+    },
+    {
+      "id": "product_chicken",
+      "description": "Raw chicken breast",
+      "imageUrl": "https://images.unsplash.com/photo-1604502533036-0d32b8748a85?q=80&w=400&h=300&fit=crop",
+      "imageHint": "chicken breast"
+    },
+    {
+      "id": "product_yogurt",
+      "description": "Container of yogurt",
+      "imageUrl": "https://images.unsplash.com/photo-1562119422-755033a042c3?q=80&w=400&h=300&fit=crop",
+      "imageHint": "yogurt cup"
+    },
+    {
+      "id": "product_cheese",
+      "description": "Block of cheese",
+      "imageUrl": "https://images.unsplash.com/photo-1619495116773-6c8273ab3de4?q=80&w=400&h=300&fit=crop",
+      "imageHint": "cheese block"
+    },
+    {
+      "id": "product_banana",
+      "description": "Bunch of bananas",
+      "imageUrl": "https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?q=80&w=400&h=300&fit=crop",
+      "imageHint": "yellow banana"
+    }
+  ]
+}
