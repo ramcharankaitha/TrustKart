@@ -20,7 +20,8 @@ import {
   UserX,
   Package,
   CreditCard,
-  Truck
+  Truck,
+  Sprout
 } from 'lucide-react';
 import { AdminDatabasePlugin } from '@/lib/plugins/admin-database-plugin';
 import type { Shop } from '@/lib/types';
@@ -29,6 +30,7 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [shops, setShops] = useState<Shop[]>([]);
   const [deliveryAgents, setDeliveryAgents] = useState<any[]>([]);
+  const [farmers, setFarmers] = useState<any[]>([]);
   const [stats, setStats] = useState({
     // Shop stats
     totalShops: 0,
@@ -59,13 +61,22 @@ export default function AdminDashboard() {
     approvedAgents: 0,
     rejectedAgents: 0,
     suspendedAgents: 0,
-    availableAgents: 0
+    availableAgents: 0,
+
+    // Farmer stats
+    totalFarmers: 0,
+    pendingFarmers: 0,
+    approvedFarmers: 0,
+    rejectedFarmers: 0,
+    suspendedFarmers: 0,
+    activeFarmers: 0
   });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadShops();
     loadDeliveryAgents();
+    loadFarmers();
   }, []);
 
   const loadShops = async () => {
@@ -419,6 +430,188 @@ export default function AdminDashboard() {
     }
   };
 
+  const loadFarmers = async () => {
+    try {
+      setLoading(true);
+      console.log('🔍 Loading farmers from database...');
+      
+      const result = await AdminDatabasePlugin.getAllFarmers();
+      
+      if (result.success) {
+        console.log('✅ Loaded farmers:', result.farmers.length);
+        console.log('📋 Farmer statuses:', result.farmers.map(f => ({ name: f.name, status: f.status })));
+        setFarmers(result.farmers);
+        
+        // Update farmer stats - handle both uppercase and lowercase status
+        const farmerStats = {
+          totalFarmers: result.farmers.length,
+          pendingFarmers: result.farmers.filter(farmer => 
+            farmer.status?.toUpperCase() === 'PENDING' || farmer.status === 'pending'
+          ).length,
+          approvedFarmers: result.farmers.filter(farmer => 
+            farmer.status?.toUpperCase() === 'APPROVED' || farmer.status === 'approved'
+          ).length,
+          rejectedFarmers: result.farmers.filter(farmer => 
+            farmer.status?.toUpperCase() === 'REJECTED' || farmer.status === 'rejected'
+          ).length,
+          suspendedFarmers: result.farmers.filter(farmer => 
+            farmer.status?.toUpperCase() === 'SUSPENDED' || farmer.status === 'suspended'
+          ).length,
+          activeFarmers: result.farmers.filter(farmer => 
+            (farmer.status?.toUpperCase() === 'APPROVED' || farmer.status === 'approved') && farmer.isActive
+          ).length
+        };
+        setStats(prevStats => ({ ...prevStats, ...farmerStats }));
+      } else {
+        console.error('❌ Failed to load farmers:', result.error);
+        toast({
+          variant: "destructive",
+          title: "Error Loading Farmers",
+          description: result.error || "Failed to load farmers. Check if farmers table exists in database.",
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Error loading farmers:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to load farmers: ${error.message || 'Unknown error'}`,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApproveFarmer = async (farmerId: string) => {
+    try {
+      setLoading(true);
+      console.log('🔍 Approving farmer:', farmerId);
+      
+      const adminId = 'admin_001';
+      const result = await AdminDatabasePlugin.approveFarmer(farmerId, adminId);
+      
+      if (result.success) {
+        console.log('✅ Farmer approved successfully');
+        toast({
+          title: "Farmer Approved",
+          description: "Farmer has been approved successfully.",
+        });
+        
+        // Reload farmers to reflect changes
+        await loadFarmers();
+      } else {
+        console.error('❌ Failed to approve farmer:', result.error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error,
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Error approving farmer:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to approve farmer",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectFarmer = async (farmerId: string) => {
+    try {
+      setLoading(true);
+      console.log('🔍 Rejecting farmer:', farmerId);
+      
+      const adminId = 'admin_001';
+      const reason = 'Does not meet requirements';
+      const result = await AdminDatabasePlugin.rejectFarmer(farmerId, adminId, reason);
+      
+      if (result.success) {
+        console.log('✅ Farmer rejected successfully');
+        toast({
+          title: "Farmer Rejected",
+          description: "Farmer has been rejected.",
+        });
+        await loadFarmers(); // Reload farmers to reflect changes
+      } else {
+        console.error('❌ Failed to reject farmer:', result.error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error,
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Error rejecting farmer:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to reject farmer",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSuspendFarmer = async (farmerId: string) => {
+    try {
+      setLoading(true);
+      console.log('🔍 Suspending farmer:', farmerId);
+      
+      const adminId = 'admin_001';
+      const reason = 'Policy violation';
+      const result = await AdminDatabasePlugin.suspendFarmer(farmerId, adminId, reason);
+      
+      if (result.success) {
+        console.log('✅ Farmer suspended successfully');
+        toast({
+          title: "Farmer Suspended",
+          description: "Farmer has been suspended.",
+        });
+        await loadFarmers(); // Reload farmers to reflect changes
+      } else {
+        console.error('❌ Failed to suspend farmer:', result.error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error,
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Error suspending farmer:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to suspend farmer",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getFarmerStatusBadge = (status: string) => {
+    const variants = {
+      PENDING: { variant: 'outline' as const, className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+      APPROVED: { variant: 'outline' as const, className: 'bg-green-100 text-green-800 border-green-200' },
+      REJECTED: { variant: 'outline' as const, className: 'bg-red-100 text-red-800 border-red-200' },
+      SUSPENDED: { variant: 'outline' as const, className: 'bg-orange-100 text-orange-800 border-orange-200' },
+    };
+    
+    return variants[status as keyof typeof variants] || variants.PENDING;
+  };
+
+  const getFarmerStatusIcon = (status: string) => {
+    switch (status) {
+      case 'PENDING': return <Clock className="h-4 w-4" />;
+      case 'APPROVED': return <CheckCircle className="h-4 w-4" />;
+      case 'REJECTED': return <XCircle className="h-4 w-4" />;
+      case 'SUSPENDED': return <AlertTriangle className="h-4 w-4" />;
+      default: return <Sprout className="h-4 w-4" />;
+    }
+  };
+
   const getDeliveryAgentStatusBadge = (status: string) => {
     const variants = {
       pending: { variant: 'outline' as const, className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
@@ -608,6 +801,7 @@ export default function AdminDashboard() {
           onClick={() => {
             loadShops();
             loadDeliveryAgents();
+            loadFarmers();
           }} 
           variant="outline"
         >
@@ -845,6 +1039,172 @@ export default function AdminDashboard() {
         )}
       </div>
 
+      {/* Farmer Management Section */}
+      <div className="space-y-4 mb-12">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Farmer Management</h2>
+          <Button 
+            onClick={async () => {
+              // Debug: Test farmers API
+              try {
+                const response = await fetch('/api/farmers/debug');
+                const data = await response.json();
+                console.log('🔍 Debug farmers API response:', data);
+                toast({
+                  title: "Debug Info",
+                  description: `Total: ${data.totalFarmers || 0}, Pending: ${data.pendingFarmers || 0}`,
+                });
+              } catch (error) {
+                console.error('Debug error:', error);
+              }
+              loadFarmers();
+            }}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Debug & Refresh
+          </Button>
+        </div>
+        
+        {farmers.length === 0 ? (
+          <Card className="p-8 text-center">
+            <Sprout className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Farmers Found</h3>
+            <p className="text-muted-foreground mb-4">No farmers have registered yet, or there may be a database connection issue.</p>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>• Check if farmers table exists in database</p>
+              <p>• Verify farmer registration was successful</p>
+              <p>• Check browser console for errors</p>
+              <p>• Click "Debug & Refresh" button above to test connection</p>
+            </div>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {farmers.map(farmer => (
+              <Card key={farmer.id}>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold">{farmer.name}</h3>
+                        <Badge {...getFarmerStatusBadge(farmer.status)}>
+                          {getFarmerStatusIcon(farmer.status)}
+                          <span className="ml-1">{farmer.status}</span>
+                        </Badge>
+                        {farmer.isActive && farmer.status === 'APPROVED' && (
+                          <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Active
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                        <div>
+                          <span className="font-medium">Email:</span> {farmer.email}
+                        </div>
+                        <div>
+                          <span className="font-medium">Phone:</span> {farmer.phone}
+                        </div>
+                        <div>
+                          <span className="font-medium">Farm Name:</span> {farmer.farmName || 'Not provided'}
+                        </div>
+                        <div>
+                          <span className="font-medium">Farm Size:</span> {farmer.farmSize || 'Not provided'}
+                        </div>
+                        <div className="col-span-2">
+                          <span className="font-medium">Address:</span> {farmer.address || 'Not provided'}
+                          {farmer.city && `, ${farmer.city}`}
+                          {farmer.state && `, ${farmer.state}`}
+                          {farmer.pincode && ` - ${farmer.pincode}`}
+                        </div>
+                        <div>
+                          <span className="font-medium">Aadhaar:</span> {farmer.aadhaarNumber || 'Not provided'}
+                        </div>
+                        <div>
+                          <span className="font-medium">Organic Certification:</span> {farmer.organicCertification || 'Not provided'}
+                        </div>
+                        {farmer.cropsGrown && farmer.cropsGrown.length > 0 && (
+                          <div className="col-span-2">
+                            <span className="font-medium">Crops Grown:</span> {farmer.cropsGrown.join(', ')}
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-medium">Rating:</span> {farmer.rating.toFixed(1)}/5.0
+                        </div>
+                        <div>
+                          <span className="font-medium">Vegetables Submitted:</span> {farmer.totalVegetablesSubmitted} ({farmer.totalVegetablesApproved} approved)
+                        </div>
+                        <div>
+                          <span className="font-medium">Registered:</span> {new Date(farmer.createdAt).toLocaleDateString()}
+                        </div>
+                        {farmer.reviewedAt && (
+                          <div>
+                            <span className="font-medium">Reviewed:</span> {new Date(farmer.reviewedAt).toLocaleDateString()}
+                          </div>
+                        )}
+                        {farmer.rejectionReason && (
+                          <div className="col-span-2">
+                            <span className="font-medium text-red-600">Rejection Reason:</span> {farmer.rejectionReason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-2 ml-4">
+                      {farmer.status === 'PENDING' && (
+                        <>
+                          <Button 
+                            onClick={() => handleApproveFarmer(farmer.id)}
+                            disabled={loading}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Approve
+                          </Button>
+                          <Button 
+                            onClick={() => handleRejectFarmer(farmer.id)}
+                            disabled={loading}
+                            variant="destructive"
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Reject
+                          </Button>
+                        </>
+                      )}
+                      
+                      {farmer.status === 'APPROVED' && (
+                        <Button 
+                          onClick={() => handleSuspendFarmer(farmer.id)}
+                          disabled={loading}
+                          variant="outline"
+                          className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                        >
+                          <AlertTriangle className="h-4 w-4 mr-2" />
+                          Suspend
+                        </Button>
+                      )}
+                      
+                      {farmer.status === 'SUSPENDED' && (
+                        <Button 
+                          onClick={() => handleApproveFarmer(farmer.id)}
+                          disabled={loading}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Re-approve
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Customer Visibility Info */}
       <Card className="mt-8">
         <CardHeader>
@@ -867,6 +1227,10 @@ export default function AdminDashboard() {
               <li>⏳ Pending delivery agents: Under admin review</li>
               <li>❌ Rejected delivery agents: Cannot login</li>
               <li>⚠️ Suspended delivery agents: Temporarily unavailable</li>
+              <li>🌾 Approved farmers: Can submit organic vegetables</li>
+              <li>⏳ Pending farmers: Under admin review</li>
+              <li>❌ Rejected farmers: Cannot login</li>
+              <li>⚠️ Suspended farmers: Temporarily cannot submit vegetables</li>
             </ul>
           </div>
         </CardContent>

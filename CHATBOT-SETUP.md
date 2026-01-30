@@ -39,7 +39,22 @@ NEXT_PUBLIC_GOOGLE_GENAI_API_KEY=your_api_key_here
 - Never expose your API key in client-side code
 - The API key is used server-side in the `/api/chat` route
 
-### Step 3: Restart Your Development Server
+### Step 3: (Optional) Connect an n8n Agent
+
+If you want the chatbot to use your n8n LangChain workflow instead of talking to Gemini directly:
+
+1. In n8n, copy the public webhook URL of your AI Agent workflow (from the **When chat message received** trigger).
+2. Add the following variables to `.env.local`:
+
+```env
+N8N_AGENT_WEBHOOK_URL=https://your-n8n-host/webhook/ai-agent
+N8N_AGENT_WEBHOOK_SECRET=optional-shared-secret
+```
+
+3. (Optional) Configure the workflow to expect `message`, `userRole`, `chatHistory`, and return `{ "response": "text" }`.
+4. When the vars are set, the Next.js API posts every chat turn to n8n first and falls back to Gemini only if the webhook fails.
+
+### Step 4: Restart Your Development Server
 
 After adding the environment variable, restart your Next.js development server:
 

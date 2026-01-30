@@ -29,12 +29,14 @@ import {
   Loader2,
   Truck,
   Leaf,
+  Sprout,
   Image as ImageIcon
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { ShopRegistrationRequest, ShopDocument, OrganicVegetable } from '@/lib/types';
 import DocumentPreviewModal from '@/components/document-preview-modal';
 import { LoginDatabasePlugin } from '@/lib/plugins/login-database-plugin';
+import { AdminDatabasePlugin } from '@/lib/plugins/admin-database-plugin';
 
 export default function AdminApprovalDashboard() {
   const { toast } = useToast();
@@ -50,6 +52,10 @@ export default function AdminApprovalDashboard() {
   // Delivery Agent Management State
   const [deliveryAgents, setDeliveryAgents] = useState<any[]>([]);
   const [deliveryAgentLoading, setDeliveryAgentLoading] = useState(false);
+  
+  // Farmer Management State
+  const [farmers, setFarmers] = useState<any[]>([]);
+  const [farmerLoading, setFarmerLoading] = useState(false);
   
   // Organic Vegetables State
   const [organicVegetables, setOrganicVegetables] = useState<OrganicVegetable[]>([]);
@@ -199,6 +205,7 @@ export default function AdminApprovalDashboard() {
   useEffect(() => {
     fetchAllRequests();
     loadDeliveryAgents();
+    loadFarmers();
     fetchOrganicVegetables();
   }, []);
 
@@ -242,6 +249,152 @@ export default function AdminApprovalDashboard() {
   useEffect(() => {
     // Documents are preview-only, not stored
   }, [selectedRequest?.id]);
+
+  // Farmer Management Functions
+  const loadFarmers = async () => {
+    try {
+      setFarmerLoading(true);
+      console.log('🔍 Loading farmers from database...');
+      
+      const result = await AdminDatabasePlugin.getAllFarmers();
+      
+      if (result.success) {
+        console.log('✅ Loaded farmers:', result.farmers.length);
+        setFarmers(result.farmers);
+      } else {
+        console.error('❌ Failed to load farmers:', result.error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error || "Failed to load farmers",
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Error loading farmers:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load farmers from database",
+      });
+    } finally {
+      setFarmerLoading(false);
+    }
+  };
+
+  const handleApproveFarmer = async (farmerId: string) => {
+    try {
+      setFarmerLoading(true);
+      const adminId = 'admin_001';
+      const result = await AdminDatabasePlugin.approveFarmer(farmerId, adminId);
+      
+      if (result.success) {
+        toast({
+          title: "Farmer Approved",
+          description: "Farmer has been approved successfully.",
+        });
+        await loadFarmers();
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error,
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Error approving farmer:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to approve farmer",
+      });
+    } finally {
+      setFarmerLoading(false);
+    }
+  };
+
+  const handleRejectFarmer = async (farmerId: string) => {
+    try {
+      setFarmerLoading(true);
+      const adminId = 'admin_001';
+      const reason = 'Does not meet requirements';
+      const result = await AdminDatabasePlugin.rejectFarmer(farmerId, adminId, reason);
+      
+      if (result.success) {
+        toast({
+          title: "Farmer Rejected",
+          description: "Farmer has been rejected.",
+        });
+        await loadFarmers();
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error,
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Error rejecting farmer:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to reject farmer",
+      });
+    } finally {
+      setFarmerLoading(false);
+    }
+  };
+
+  const handleSuspendFarmer = async (farmerId: string) => {
+    try {
+      setFarmerLoading(true);
+      const adminId = 'admin_001';
+      const reason = 'Policy violation';
+      const result = await AdminDatabasePlugin.suspendFarmer(farmerId, adminId, reason);
+      
+      if (result.success) {
+        toast({
+          title: "Farmer Suspended",
+          description: "Farmer has been suspended.",
+        });
+        await loadFarmers();
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error,
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Error suspending farmer:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to suspend farmer",
+      });
+    } finally {
+      setFarmerLoading(false);
+    }
+  };
+
+  const getFarmerStatusBadge = (status: string) => {
+    const variants = {
+      PENDING: { variant: 'outline' as const, className: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+      APPROVED: { variant: 'outline' as const, className: 'bg-green-100 text-green-800 border-green-200' },
+      REJECTED: { variant: 'outline' as const, className: 'bg-red-100 text-red-800 border-red-200' },
+      SUSPENDED: { variant: 'outline' as const, className: 'bg-orange-100 text-orange-800 border-orange-200' },
+    };
+    return variants[status as keyof typeof variants] || variants.PENDING;
+  };
+
+  const getFarmerStatusIcon = (status: string) => {
+    switch (status) {
+      case 'PENDING': return <Clock className="h-4 w-4" />;
+      case 'APPROVED': return <CheckCircle className="h-4 w-4" />;
+      case 'REJECTED': return <XCircle className="h-4 w-4" />;
+      case 'SUSPENDED': return <AlertCircle className="h-4 w-4" />;
+      default: return <Sprout className="h-4 w-4" />;
+    }
+  };
 
   // Delivery Agent Management Functions
   const loadDeliveryAgents = async () => {
@@ -1412,6 +1565,167 @@ export default function AdminApprovalDashboard() {
                         <Button 
                           onClick={() => handleApproveDeliveryAgent(agent.id)}
                           disabled={deliveryAgentLoading}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Re-approve
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Farmer Management Section */}
+      <div className="mt-12">
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">Farmer Management</h2>
+              <p className="text-muted-foreground">Review and approve farmer registration requests</p>
+            </div>
+            <Button onClick={loadFarmers} disabled={farmerLoading} variant="outline">
+              {farmerLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh Farmers
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {farmers.length === 0 ? (
+          <Card className="p-8 text-center">
+            <Sprout className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Farmers Found</h3>
+            <p className="text-muted-foreground">No farmers have registered yet.</p>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {farmers.map(farmer => (
+              <Card key={farmer.id}>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold">{farmer.name}</h3>
+                        <Badge {...getFarmerStatusBadge(farmer.status)}>
+                          {getFarmerStatusIcon(farmer.status)}
+                          <span className="ml-1">{farmer.status}</span>
+                        </Badge>
+                        {farmer.isActive && farmer.status === 'APPROVED' && (
+                          <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Active
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">Email:</span> {farmer.email}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">Phone:</span> {farmer.phone}
+                        </div>
+                        <div>
+                          <span className="font-medium">Farm Name:</span> {farmer.farmName || 'Not provided'}
+                        </div>
+                        <div>
+                          <span className="font-medium">Farm Size:</span> {farmer.farmSize || 'Not provided'}
+                        </div>
+                        <div className="col-span-2 flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                          <div>
+                            <span className="font-medium">Address:</span> {farmer.address || 'Not provided'}
+                            {farmer.city && `, ${farmer.city}`}
+                            {farmer.state && `, ${farmer.state}`}
+                            {farmer.pincode && ` - ${farmer.pincode}`}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-medium">Aadhaar:</span> {farmer.aadhaarNumber || 'Not provided'}
+                        </div>
+                        <div>
+                          <span className="font-medium">Organic Certification:</span> {farmer.organicCertification || 'Not provided'}
+                        </div>
+                        {farmer.cropsGrown && farmer.cropsGrown.length > 0 && (
+                          <div className="col-span-2">
+                            <span className="font-medium">Crops Grown:</span> {farmer.cropsGrown.join(', ')}
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-medium">Rating:</span> {farmer.rating.toFixed(1)}/5.0
+                        </div>
+                        <div>
+                          <span className="font-medium">Vegetables Submitted:</span> {farmer.totalVegetablesSubmitted} ({farmer.totalVegetablesApproved} approved)
+                        </div>
+                        <div>
+                          <span className="font-medium">Registered:</span> {new Date(farmer.createdAt).toLocaleDateString()}
+                        </div>
+                        {farmer.reviewedAt && (
+                          <div>
+                            <span className="font-medium">Reviewed:</span> {new Date(farmer.reviewedAt).toLocaleDateString()}
+                          </div>
+                        )}
+                        {farmer.rejectionReason && (
+                          <div className="col-span-2">
+                            <span className="font-medium text-red-600">Rejection Reason:</span> {farmer.rejectionReason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-2 ml-4">
+                      {farmer.status === 'PENDING' && (
+                        <>
+                          <Button 
+                            onClick={() => handleApproveFarmer(farmer.id)}
+                            disabled={farmerLoading}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Approve
+                          </Button>
+                          <Button 
+                            onClick={() => handleRejectFarmer(farmer.id)}
+                            disabled={farmerLoading}
+                            variant="destructive"
+                          >
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Reject
+                          </Button>
+                        </>
+                      )}
+                      
+                      {farmer.status === 'APPROVED' && (
+                        <Button 
+                          onClick={() => handleSuspendFarmer(farmer.id)}
+                          disabled={farmerLoading}
+                          variant="outline"
+                          className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                        >
+                          <AlertCircle className="h-4 w-4 mr-2" />
+                          Suspend
+                        </Button>
+                      )}
+                      
+                      {farmer.status === 'SUSPENDED' && (
+                        <Button 
+                          onClick={() => handleApproveFarmer(farmer.id)}
+                          disabled={farmerLoading}
                           className="bg-green-600 hover:bg-green-700"
                         >
                           <CheckCircle className="h-4 w-4 mr-2" />

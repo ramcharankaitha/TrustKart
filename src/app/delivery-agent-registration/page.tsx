@@ -675,7 +675,7 @@ export default function DeliveryAgentRegistrationPage() {
       {/* Footer */}
       <div className="text-center p-6">
         <p className="text-slate-500 dark:text-slate-400 text-sm">
-          © 2024 TrustKart Delivery. All rights reserved.
+          © 2025 TrustKart Delivery. All rights reserved.
         </p>
       </div>
     </div>

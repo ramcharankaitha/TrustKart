@@ -52,7 +52,9 @@ CREATE TABLE IF NOT EXISTS farmer_documents (
   file_size BIGINT,
   file_type TEXT,
   is_verified BOOLEAN DEFAULT false,
-  uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  verified_at TIMESTAMP WITH TIME ZONE,
+  verified_by TEXT REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_farmer_documents_farmer_id ON farmer_documents(farmer_id);

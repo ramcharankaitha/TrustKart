@@ -4,6 +4,8 @@
  */
 
 const GOOGLE_AI_API_KEY = process.env.GOOGLE_GENAI_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_GENAI_API_KEY;
+const N8N_AGENT_WEBHOOK_URL = process.env.N8N_AGENT_WEBHOOK_URL;
+const N8N_AGENT_WEBHOOK_SECRET = process.env.N8N_AGENT_WEBHOOK_SECRET;
 // Use gemini-1.5-flash for better compatibility and reliability
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
@@ -25,6 +27,12 @@ export async function generateAIChatResponse(
   userRole: 'customer' | 'shopkeeper' | 'admin' | 'guest',
   chatHistory: ChatHistory[] = []
 ): Promise<string> {
+  // Try n8n agent first if configured
+  const agentResponse = await callN8nAgent(message, userRole, chatHistory);
+  if (agentResponse) {
+    return agentResponse;
+  }
+
   // If no API key, use intelligent fallback responses
   if (!GOOGLE_AI_API_KEY) {
     console.warn('GOOGLE_GENAI_API_KEY not set, using fallback responses');
@@ -114,6 +122,61 @@ export async function generateAIChatResponse(
   } catch (error) {
     console.error('AI chat error:', error);
     return generateFallbackResponse(message, userRole);
+  }
+}
+
+/**
+ * Send conversation to external n8n agent workflow if configured.
+ */
+async function callN8nAgent(
+  message: string,
+  userRole: 'customer' | 'shopkeeper' | 'admin' | 'guest',
+  chatHistory: ChatHistory[]
+): Promise<string | null> {
+  if (!N8N_AGENT_WEBHOOK_URL) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(N8N_AGENT_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(N8N_AGENT_WEBHOOK_SECRET ? { 'x-shared-secret': N8N_AGENT_WEBHOOK_SECRET } : {}),
+      },
+      body: JSON.stringify({
+        message,
+        userRole,
+        chatHistory,
+        metadata: {
+          source: 'tk-main',
+          timestamp: new Date().toISOString(),
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('n8n agent webhook error:', await response.text());
+      return null;
+    }
+
+    const data = await response.json().catch(() => null);
+    if (!data) {
+      return null;
+    }
+
+    const agentResponse =
+      (typeof data.response === 'string' && data.response.trim()) ||
+      (typeof data.answer === 'string' && data.answer.trim()) ||
+      (typeof data.text === 'string' && data.text.trim()) ||
+      (typeof data.result === 'string' && data.result.trim()) ||
+      (typeof data.ai_output === 'string' && data.ai_output.trim()) ||
+      (typeof data.data?.response === 'string' && data.data.response.trim());
+
+    return agentResponse ? agentResponse : null;
+  } catch (error) {
+    console.error('Failed to reach n8n agent webhook:', error);
+    return null;
   }
 }
 

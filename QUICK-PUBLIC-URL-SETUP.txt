@@ -1,0 +1,33 @@
+===========================================
+QUICK PUBLIC URL SETUP
+===========================================
+
+WHAT YOU NEED TO PROVIDE:
+-------------------------
+Just your PUBLIC URL (that's it!)
+
+Example URLs:
+- https://trustkart.vercel.app
+- https://trustkart.com
+- https://app.trustkart.com
+- https://your-app.railway.app
+
+WHAT TO UPDATE IN .env FILE:
+-----------------------------
+Open: tk-main/.env
+
+Change these 2 lines:
+NEXTAUTH_URL="https://YOUR-PUBLIC-URL-HERE"
+NEXT_PUBLIC_BASE_URL="https://YOUR-PUBLIC-URL-HERE"
+
+Example:
+NEXTAUTH_URL="https://trustkart.vercel.app"
+NEXT_PUBLIC_BASE_URL="https://trustkart.vercel.app"
+
+THAT'S IT!
+----------
+All other tokens/credentials are already configured.
+Just provide your public URL and I'll help you set it up!
+
+===========================================
+

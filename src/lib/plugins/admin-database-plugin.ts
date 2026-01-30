@@ -120,7 +120,13 @@ export class AdminDatabasePlugin {
       console.log('🔍 AdminDatabasePlugin: Getting all shops...')
       const supabaseClient = getSupabaseClient()
       
-      const { data: shops, error } = await supabaseClient
+      // First try to get shops with all columns
+      // If that fails due to missing columns, fall back to basic columns
+      let shops: any[] = []
+      let error: any = null
+      
+      // Try full query first
+      const fullQuery = await supabaseClient
         .from('shops')
         .select(`
           id,
@@ -130,6 +136,8 @@ export class AdminDatabasePlugin {
           city,
           state,
           pincode,
+          latitude,
+          longitude,
           phone,
           email,
           business_type,
@@ -141,43 +149,95 @@ export class AdminDatabasePlugin {
           image_hint,
           owner_id,
           registration_date,
+          approval_date,
+          rejection_reason,
+          approved_by,
+          rejected_by,
           created_at,
           updated_at
         `)
         .order('created_at', { ascending: false })
 
+      if (fullQuery.error) {
+        console.warn('⚠️ Full query failed, trying basic columns:', fullQuery.error.message)
+        
+        // Fallback to basic columns that definitely exist
+        const basicQuery = await supabaseClient
+          .from('shops')
+          .select(`
+            id,
+            name,
+            description,
+            address,
+            latitude,
+            longitude,
+            phone,
+            email,
+            status,
+            owner_id,
+            created_at,
+            updated_at
+          `)
+          .order('created_at', { ascending: false })
+        
+        if (basicQuery.error) {
+          console.error('❌ Error fetching shops (basic query also failed):', basicQuery.error)
+          console.error('Error details:', basicQuery.error.details, basicQuery.error.hint, basicQuery.error.code)
+          return { 
+            success: false, 
+            error: `Database error: ${basicQuery.error.message}. Please run ADD-SHOPS-MISSING-COLUMNS.sql script in Supabase.`,
+            shops: [] 
+          }
+        }
+        
+        shops = basicQuery.data || []
+        error = null
+      } else {
+        shops = fullQuery.data || []
+        error = null
+      }
+
       if (error) {
         console.error('❌ Error fetching shops:', error)
+        console.error('Error details:', error.details, error.hint, error.code)
         return { success: false, error: error.message, shops: [] }
       }
 
       console.log('✅ Successfully fetched shops:', shops?.length || 0)
       
       // Transform the data to match the Shop type
-      const transformedShops = (shops || []).map(shop => ({
-        id: shop.id,
-        name: shop.name,
-        description: shop.description || 'Quality products and fast delivery',
-        address: shop.address || 'Address not available',
-        city: shop.city || 'City not available',
-        state: shop.state || 'State not available',
-        pincode: shop.pincode || '000000',
-        phone: shop.phone || 'Phone not available',
-        email: shop.email || 'Email not available',
-        status: shop.status?.toLowerCase() || 'pending',
-        rating: shop.rating || 0,
-        deliveryTime: shop.delivery_time_minutes ? `${shop.delivery_time_minutes} min` : '20-30 min',
-        deliveryFee: shop.delivery_fee ? `₹${shop.delivery_fee}` : 'Free',
-        imageUrl: shop.image_url || '/api/placeholder/300/200',
-        imageHint: shop.image_hint || `${shop.name} storefront`,
-        ownerId: shop.owner_id || 'unknown',
-        location: shop.city || 'Unknown',
-        businessType: shop.business_type || 'General',
-        registrationDate: new Date(shop.registration_date || shop.created_at),
-        documents: [],
-        createdAt: new Date(shop.created_at),
-        updatedAt: new Date(shop.updated_at)
-      }))
+      const transformedShops = (shops || []).map(shop => {
+        // Use actual column values or extract from address as fallback
+        const city = shop.city || (shop.address ? shop.address.split(',')[shop.address.split(',').length - 2]?.trim() : null) || 'Unknown'
+        const state = shop.state || (shop.address ? shop.address.split(',')[shop.address.split(',').length - 1]?.trim() : null) || 'Unknown'
+        const pincode = shop.pincode || '000000'
+        
+        return {
+          id: shop.id,
+          name: shop.name,
+          description: shop.description || 'Quality products and fast delivery',
+          address: shop.address || 'Address not available',
+          city: city,
+          state: state,
+          pincode: pincode,
+          phone: shop.phone || 'Phone not available',
+          email: shop.email || 'Email not available',
+          status: shop.status?.toLowerCase() || 'pending',
+          rating: shop.rating || 0,
+          deliveryTime: shop.delivery_time_minutes ? `${shop.delivery_time_minutes} min` : '20-30 min',
+          deliveryFee: shop.delivery_fee ? `₹${shop.delivery_fee}` : 'Free',
+          imageUrl: shop.image_url || '/api/placeholder/300/200',
+          imageHint: shop.image_hint || `${shop.name} storefront`,
+          ownerId: shop.owner_id || 'unknown',
+          location: city,
+          businessType: shop.business_type || 'General',
+          registrationDate: new Date(shop.registration_date || shop.created_at),
+          approvalDate: shop.approval_date ? new Date(shop.approval_date) : undefined,
+          documents: [],
+          createdAt: new Date(shop.created_at),
+          updatedAt: new Date(shop.updated_at)
+        };
+      })
 
       return { success: true, shops: transformedShops }
     } catch (error: any) {
@@ -638,6 +698,326 @@ export class AdminDatabasePlugin {
       }
     } catch (error) {
       return { success: false, error: 'Failed to get delivery agent stats' }
+    }
+  }
+
+  // ==============================================
+  // FARMER MANAGEMENT METHODS
+  // ==============================================
+
+  // Get all farmers
+  static async getAllFarmers() {
+    try {
+      console.log('🔍 AdminDatabasePlugin: Getting all farmers...')
+      const supabaseClient = getSupabaseClient()
+      
+      // First, try a simple query to check if table exists
+      const { data: testData, error: testError } = await supabaseClient
+        .from('farmers')
+        .select('id')
+        .limit(1)
+      
+      if (testError) {
+        console.error('❌ Farmers table error:', testError)
+        console.error('Error code:', testError.code)
+        console.error('Error details:', testError.details)
+        console.error('Error hint:', testError.hint)
+        return { 
+          success: false, 
+          error: `Database error: ${testError.message}. Code: ${testError.code}. Hint: ${testError.hint || 'Check if farmers table exists'}`,
+          farmers: [] 
+        }
+      }
+      
+      const { data: farmers, error } = await supabaseClient
+        .from('farmers')
+        .select(`
+          id,
+          name,
+          email,
+          phone,
+          aadhaar_number,
+          address,
+          city,
+          state,
+          pincode,
+          latitude,
+          longitude,
+          farm_name,
+          farm_address,
+          farm_size,
+          crops_grown,
+          organic_certification,
+          status,
+          is_active,
+          rating,
+          total_vegetables_submitted,
+          total_vegetables_approved,
+          rejection_reason,
+          reviewed_by,
+          reviewed_at,
+          created_at,
+          updated_at
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('❌ Error fetching farmers:', error)
+        console.error('Error code:', error.code)
+        console.error('Error details:', error.details)
+        console.error('Error hint:', error.hint)
+        return { 
+          success: false, 
+          error: `Query error: ${error.message}. Code: ${error.code}`,
+          farmers: [] 
+        }
+      }
+
+      console.log('✅ Successfully fetched farmers:', farmers?.length || 0)
+      console.log('📊 Farmers data sample:', farmers?.slice(0, 2))
+      
+      // Transform the data to match the expected format
+      const transformedFarmers = (farmers || []).map(farmer => {
+        // Normalize status to uppercase
+        const normalizedStatus = farmer.status 
+          ? farmer.status.toUpperCase() 
+          : 'PENDING';
+        
+        return {
+          id: farmer.id,
+          name: farmer.name,
+          email: farmer.email,
+          phone: farmer.phone,
+          aadhaarNumber: farmer.aadhaar_number,
+          address: farmer.address,
+          city: farmer.city,
+          state: farmer.state,
+          pincode: farmer.pincode,
+          latitude: farmer.latitude,
+          longitude: farmer.longitude,
+          farmName: farmer.farm_name,
+          farmAddress: farmer.farm_address,
+          farmSize: farmer.farm_size,
+          cropsGrown: farmer.crops_grown || [],
+          organicCertification: farmer.organic_certification,
+          status: normalizedStatus,
+          isActive: farmer.is_active || false,
+          rating: farmer.rating || 0,
+          totalVegetablesSubmitted: farmer.total_vegetables_submitted || 0,
+          totalVegetablesApproved: farmer.total_vegetables_approved || 0,
+          rejectionReason: farmer.rejection_reason,
+          reviewedBy: farmer.reviewed_by,
+          reviewedAt: farmer.reviewed_at ? new Date(farmer.reviewed_at) : null,
+          createdAt: new Date(farmer.created_at),
+          updatedAt: new Date(farmer.updated_at)
+        };
+      })
+
+      return { success: true, farmers: transformedFarmers }
+    } catch (error: any) {
+      console.error('❌ Error fetching farmers:', error)
+      return { success: false, error: error.message || 'Failed to get farmers', farmers: [] }
+    }
+  }
+
+  // Get pending farmers
+  static async getPendingFarmers() {
+    try {
+      const { data: farmers, error } = await getSupabaseClient()
+        .from('farmers')
+        .select('*')
+        .eq('status', 'PENDING')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        return { success: false, error: error.message, farmers: [] }
+      }
+
+      return { success: true, farmers: farmers || [] }
+    } catch (error) {
+      return { success: false, error: 'Failed to get pending farmers', farmers: [] }
+    }
+  }
+
+  // Approve farmer
+  static async approveFarmer(farmerId: string, adminId: string) {
+    try {
+      const { data: farmer, error } = await getSupabaseClient()
+        .from('farmers')
+        .update({ 
+          status: 'APPROVED',
+          is_active: true,
+          reviewed_by: adminId,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', farmerId)
+        .select()
+        .single()
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      // Log the approval activity
+      try {
+        await getSupabaseClient()
+          .from('activity_logs')
+          .insert([{
+            user_id: adminId,
+            action: 'APPROVE',
+            entity_type: 'FARMER',
+            entity_id: farmerId,
+            new_values: { status: 'APPROVED' }
+          }])
+      } catch (logError) {
+        console.warn('Failed to log approval activity:', logError)
+      }
+
+      return { success: true, farmer: farmer }
+    } catch (error) {
+      return { success: false, error: 'Failed to approve farmer' }
+    }
+  }
+
+  // Reject farmer
+  static async rejectFarmer(farmerId: string, adminId: string, reason: string) {
+    try {
+      const { data: farmer, error } = await getSupabaseClient()
+        .from('farmers')
+        .update({ 
+          status: 'REJECTED',
+          is_active: false,
+          rejection_reason: reason,
+          reviewed_by: adminId,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', farmerId)
+        .select()
+        .single()
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      // Log the rejection activity
+      try {
+        await getSupabaseClient()
+          .from('activity_logs')
+          .insert([{
+            user_id: adminId,
+            action: 'REJECT',
+            entity_type: 'FARMER',
+            entity_id: farmerId,
+            new_values: { status: 'REJECTED', reason }
+          }])
+      } catch (logError) {
+        console.warn('Failed to log rejection activity:', logError)
+      }
+
+      return { success: true, farmer: farmer }
+    } catch (error) {
+      return { success: false, error: 'Failed to reject farmer' }
+    }
+  }
+
+  // Suspend farmer
+  static async suspendFarmer(farmerId: string, adminId: string, reason: string) {
+    try {
+      const { data: farmer, error } = await getSupabaseClient()
+        .from('farmers')
+        .update({ 
+          status: 'SUSPENDED',
+          is_active: false,
+          rejection_reason: reason,
+          reviewed_by: adminId,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', farmerId)
+        .select()
+        .single()
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      // Log the suspension activity
+      try {
+        await getSupabaseClient()
+          .from('activity_logs')
+          .insert([{
+            user_id: adminId,
+            action: 'SUSPEND',
+            entity_type: 'FARMER',
+            entity_id: farmerId,
+            new_values: { status: 'SUSPENDED', reason }
+          }])
+      } catch (logError) {
+        console.warn('Failed to log suspension activity:', logError)
+      }
+
+      return { success: true, farmer: farmer }
+    } catch (error) {
+      return { success: false, error: 'Failed to suspend farmer' }
+    }
+  }
+
+  // Get farmer statistics
+  static async getFarmerStats() {
+    try {
+      const supabaseClient = getSupabaseClient()
+      
+      // Get total farmers count
+      const { count: totalFarmers } = await supabaseClient
+        .from('farmers')
+        .select('id', { count: 'exact' })
+
+      // Get pending farmers count
+      const { count: pendingFarmers } = await supabaseClient
+        .from('farmers')
+        .select('id', { count: 'exact' })
+        .eq('status', 'PENDING')
+
+      // Get approved farmers count
+      const { count: approvedFarmers } = await supabaseClient
+        .from('farmers')
+        .select('id', { count: 'exact' })
+        .eq('status', 'APPROVED')
+
+      // Get rejected farmers count
+      const { count: rejectedFarmers } = await supabaseClient
+        .from('farmers')
+        .select('id', { count: 'exact' })
+        .eq('status', 'REJECTED')
+
+      // Get suspended farmers count
+      const { count: suspendedFarmers } = await supabaseClient
+        .from('farmers')
+        .select('id', { count: 'exact' })
+        .eq('status', 'SUSPENDED')
+
+      // Get active farmers count
+      const { count: activeFarmers } = await supabaseClient
+        .from('farmers')
+        .select('id', { count: 'exact' })
+        .eq('is_active', true)
+        .eq('status', 'APPROVED')
+
+      return {
+        success: true,
+        stats: {
+          totalFarmers: totalFarmers || 0,
+          pendingFarmers: pendingFarmers || 0,
+          approvedFarmers: approvedFarmers || 0,
+          rejectedFarmers: rejectedFarmers || 0,
+          suspendedFarmers: suspendedFarmers || 0,
+          activeFarmers: activeFarmers || 0
+        }
+      }
+    } catch (error) {
+      return { success: false, error: 'Failed to get farmer stats' }
     }
   }
 }
